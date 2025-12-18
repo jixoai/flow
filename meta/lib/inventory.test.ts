@@ -18,10 +18,7 @@ import {
   getActiveMcps,
   getActiveWorkflows,
 } from "./inventory.ts";
-import {
-  USER_MCPS_DIR,
-  USER_WORKFLOWS_DIR,
-} from "../../common/paths.ts";
+import { USER_MCPS_DIR, USER_WORKFLOWS_DIR } from "../../common/paths.ts";
 
 // =============================================================================
 // Test Fixtures

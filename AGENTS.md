@@ -252,13 +252,13 @@ const metaMcp = createMetaMcp({
    ```bash
    # 格式化代码
    deno fmt
-   
+
    # 检查并自动修复 lint 问题
    deno lint --fix
-   
+
    # 类型检查
    deno check <file.ts>
-   
+
    # 运行相关测试
    deno test --allow-all <test-file.ts>
    ```

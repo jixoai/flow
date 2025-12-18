@@ -10,12 +10,15 @@
  *   deno run -A jsr:@jixo/flow --help               # Show help
  */
 
-import { parseArgs } from "jsr:@std/cli/parse-args";
+import { parseArgs } from "jsr:@std/cli@^1.0.0/parse-args";
+import { resolve } from "jsr:@std/path@^1.0.0";
+import denoConfig from "./deno.json" with { type: "json" };
 
 const JIXOHOME = Deno.env.get("JIXOHOME") ||
   `${Deno.env.get("HOME")}/.jixoflow`;
 const DEFAULT_REPO_URL = "https://github.com/jixoai/workflow.git";
 const SOURCE_CONFIG_FILE = `${JIXOHOME}/.source.json`;
+const VERSION = denoConfig.version;
 
 // =============================================================================
 // CLI Argument Parsing
@@ -24,21 +27,22 @@ const SOURCE_CONFIG_FILE = `${JIXOHOME}/.source.json`;
 interface CliArgs {
   _: string[];
   help: boolean;
-  h: boolean;
+  version: boolean;
   source?: string;
-  s?: string;
 }
 
 function parseCliArgs(): CliArgs {
   return parseArgs(Deno.args, {
-    boolean: ["help", "h"],
-    string: ["source", "s"],
+    boolean: ["help", "version"],
+    string: ["source"],
     alias: {
       h: "help",
+      v: "version",
       s: "source",
     },
     default: {
       help: false,
+      version: false,
     },
   }) as CliArgs;
 }
@@ -82,13 +86,11 @@ function isLocalPath(source: string): boolean {
 }
 
 function expandPath(path: string): string {
+  // Expand ~ to home directory
   if (path.startsWith("~")) {
-    return path.replace("~", Deno.env.get("HOME") || "");
+    path = path.replace("~", Deno.env.get("HOME") || "");
   }
-  if (path.startsWith("./") || path.startsWith("../")) {
-    return `${Deno.cwd()}/${path}`;
-  }
-  return path;
+  return resolve(Deno.cwd(), path);
 }
 
 async function run(
@@ -202,19 +204,21 @@ async function installFromLocal(
 }
 
 async function install(args: CliArgs) {
-  const source = args.source || DEFAULT_REPO_URL;
-  const isGit = isGitUrl(source);
-  const isLocal = isLocalPath(source);
+  const rawSource = args.source || DEFAULT_REPO_URL;
+  const isGit = isGitUrl(rawSource);
+  const isLocal = isLocalPath(rawSource);
+  // Expand local paths to absolute
+  const source = isLocal ? expandPath(rawSource) : rawSource;
 
   if (!isGit && !isLocal) {
     // Treat as git URL if contains common git hosting domains
     if (
-      source.includes("github") || source.includes("gitlab") ||
-      source.includes("bitbucket")
+      rawSource.includes("github") || rawSource.includes("gitlab") ||
+      rawSource.includes("bitbucket")
     ) {
       // Assume it's a git URL
     } else {
-      console.error(`Invalid source: ${source}`);
+      console.error(`Invalid source: ${rawSource}`);
       console.error("Source must be a git URL or local path.");
       console.error("  Git URL: https://github.com/user/repo.git");
       console.error("  Local:   /path/to/folder or ~/folder or ./folder");
@@ -256,7 +260,7 @@ async function install(args: CliArgs) {
   // Save source configuration
   const config: SourceConfig = {
     type: isLocal ? "local" : "git",
-    url: isLocal ? expandPath(source) : source,
+    url: source,
     installedAt: new Date().toISOString(),
   };
   await saveSourceConfig(config);
@@ -297,6 +301,9 @@ async function update() {
   // Update source configuration
   config.updatedAt = new Date().toISOString();
   await saveSourceConfig(config);
+
+  // Re-register global CLI to update the command
+  await registerGlobalCli();
 
   console.log(`
 JixoFlow updated successfully!
@@ -363,6 +370,7 @@ Commands:
 
 Options:
   -h, --help                        Show this help message
+  -v, --version                     Show version number
   -s, --source <url|path>           Source for install (git URL or local path)
 
 Environment:
@@ -462,7 +470,11 @@ async function main() {
   const args = parseCliArgs();
   const command = args._[0] as string | undefined;
 
-  // Handle global --help flag
+  // Handle global flags
+  if (args.version) {
+    console.log(`jixoflow ${VERSION}`);
+    return;
+  }
   if (args.help && !command) {
     showHelp();
     return;

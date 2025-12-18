@@ -1,16 +1,22 @@
 {
   "name": "@jixo/flow",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "JixoFlow - Composable workflow framework for AI Agents",
   "type": "module",
   "main": "./cli.ts",
   "files": [
-    "cli.ts"
+    "cli.ts",
+    "deno.json"
   ],
   "repository": {
     "type": "git",
     "url": "https://github.com/jixoai/workflow.git"
   },
-  "keywords": ["deno", "workflow", "ai", "agent"],
+  "keywords": [
+    "deno",
+    "workflow",
+    "ai",
+    "agent"
+  ],
   "license": "Apache-2.0"
 }
