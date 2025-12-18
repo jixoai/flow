@@ -2,15 +2,20 @@
   "name": "@jixo/flow",
   "version": "0.1.1",
   "exports": "./cli.ts",
+  "imports": {
+    "zod": "npm:zod@^4.0",
+    "@modelcontextprotocol/sdk": "npm:@modelcontextprotocol/sdk@1.25.1",
+    "@anthropic-ai/claude-agent-sdk": "npm:@anthropic-ai/claude-agent-sdk",
+    "@openai/codex-sdk": "npm:@openai/codex-sdk"
+  },
+  "nodeModulesDir": "auto",
   "publish": {
-    "include": [
-      "cli.ts",
-      "deno.json",
-      "README.md",
-      "LICENSE"
-    ]
+    "include": ["cli.ts", "deno.json", "README.md", "LICENSE"]
   },
   "tasks": {
+    "cli": "JIXOHOME=./ deno run -A cli.ts",
+    "_cli": "deno run -A cli.ts",
+    "install": "deno run -A cli.ts install --source ./",
     "docs:dev": "cd docs && deno task dev",
     "fmt": "deno fmt",
     "lint": "deno lint --fix && deno publish --dry-run --allow-dirty",
@@ -19,14 +24,8 @@
   },
   "lint": {
     "rules": {
-      "exclude": [
-        "no-import-prefix",
-        "no-unversioned-import",
-        "require-await"
-      ]
+      "exclude": ["no-import-prefix", "no-unversioned-import", "require-await"]
     }
   },
-  "editor.codeActionsOnSave": [
-    "source.organizeImports"
-  ]
+  "editor.codeActionsOnSave": ["source.organizeImports"]
 }

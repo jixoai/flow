@@ -302,6 +302,8 @@ describe("Live Tests", {
   sanitizeOps: false,
   sanitizeResources: false,
 }, () => {
+  let testSessionId: string;
+
   afterAll(async () => {
     // Clean up test sessions
     await deleteAllSessions(MCP_NAME);

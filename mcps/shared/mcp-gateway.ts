@@ -11,8 +11,8 @@
  *   // => http://localhost:PORT/mcp/memory
  */
 
-import type { McpServer } from "npm:@modelcontextprotocol/sdk@1.25.1/server/mcp.js";
-import { WebStandardStreamableHTTPServerTransport } from "npm:@modelcontextprotocol/sdk@1.25.1/server/webStandardStreamableHttp.js";
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { basename, dirname, fromFileUrl, join } from "jsr:@std/path";
 
 // =============================================================================

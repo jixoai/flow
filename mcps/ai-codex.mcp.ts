@@ -12,7 +12,7 @@ import {
   printMcpHelp,
   z,
 } from "./shared/base-mcp.ts";
-import { Codex } from "npm:@openai/codex-sdk";
+import { Codex } from "@openai/codex-sdk";
 import {
   deleteAllSessions,
   deleteSession,

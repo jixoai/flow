@@ -28,17 +28,14 @@
  *   const result = await myTool.call({ query: "test" });
  */
 
-import { McpServer } from "npm:@modelcontextprotocol/sdk@1.25.1/server/mcp.js";
-import { StdioServerTransport } from "npm:@modelcontextprotocol/sdk@1.25.1/server/stdio.js";
-import { WebStandardStreamableHTTPServerTransport } from "npm:@modelcontextprotocol/sdk@1.25.1/server/webStandardStreamableHttp.js";
-import { z, type ZodSchema, type ZodType } from "npm:zod";
-import type {
-  ImageContent,
-  TextContent,
-} from "npm:@modelcontextprotocol/sdk@1.25.1/types.js";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
+import type { ImageContent, TextContent } from "@modelcontextprotocol/sdk/types.js";
+import { z, type ZodSchema, type ZodType } from "zod";
 
 // Re-export zod for convenience
-export { z } from "npm:zod";
+export { z } from "zod";
 
 // =============================================================================
 // Types

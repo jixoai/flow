@@ -270,14 +270,10 @@ describe("createResource", () => {
 describe("createPrompt", () => {
   it("should create a prompt", () => {
     const handler = async () => "prompt content";
-    const prompt = createPrompt("test_prompt", "Test prompt", handler, [
-      { name: "arg1", description: "Arg 1", required: true },
-    ]);
+    const prompt = createPrompt("test_prompt", "Test prompt", handler);
 
     assertEquals(prompt.name, "test_prompt");
     assertEquals(prompt.description, "Test prompt");
-    assertEquals(prompt.arguments?.length, 1);
-    assertEquals(prompt.arguments?.[0].name, "arg1");
     assertEquals(prompt.handler, handler);
   });
 });

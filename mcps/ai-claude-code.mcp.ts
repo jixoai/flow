@@ -12,7 +12,7 @@ import {
   printMcpHelp,
   z,
 } from "./shared/base-mcp.ts";
-import { query } from "npm:@anthropic-ai/claude-agent-sdk";
+import { query } from "@anthropic-ai/claude-agent-sdk";
 import {
   deleteAllSessions,
   deleteSession,
