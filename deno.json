@@ -1,0 +1,20 @@
+{
+  "name": "@jixo/flow",
+  "version": "0.1.0",
+  "exports": "./cli.ts",
+  "publish": {
+    "include": ["cli.ts", "README.md", "LICENSE"]
+  },
+  "tasks": {
+    "docs:dev": "cd docs && deno task dev",
+    "fmt": "deno fmt",
+    "lint": "deno lint --fix",
+    "check": "deno check **/*.ts"
+  },
+  "lint": {
+    "rules": {
+      "exclude": ["no-import-prefix", "no-unversioned-import", "require-await"]
+    }
+  },
+  "editor.codeActionsOnSave": ["source.organizeImports"]
+}

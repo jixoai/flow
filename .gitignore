@@ -1,0 +1,7 @@
+preferences.json
+node_modules/
+.vitepress/
+user/
+.source.json
+.zed/
+.vscode/

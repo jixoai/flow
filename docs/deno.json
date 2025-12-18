@@ -1,0 +1,8 @@
+{
+  "tasks": {
+    "dev": "npx vitepress dev",
+    "build": "npx vitepress build",
+    "preview": "npx vitepress preview"
+  },
+  "nodeModulesDir": "auto"
+}
