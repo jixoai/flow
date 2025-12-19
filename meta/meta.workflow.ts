@@ -3,14 +3,14 @@
  * Meta Workflow - Create and manage workflows/MCPs using AI
  *
  * Usage:
- *   meta list [--json]           List all workflows and MCPs
- *   meta analyze                 Analyze dependencies
- *   meta archive -n <name>       Archive a workflow or MCP
- *   meta unarchive -n <name>     Restore from archive
- *   meta create -p <prompt>      Create new workflow or MCP using AI
- *   meta config                  Show current preferences
- *   meta config init             Initialize preferences.ts
- *   meta config edit -p <prompt> Edit preferences with AI
+ *   meta list [--json]                List all workflows and MCPs
+ *   meta analyze                      Analyze dependencies
+ *   meta archive -n <name>            Archive a workflow or MCP
+ *   meta unarchive -n <name>          Restore from archive
+ *   meta create -p <prompt>           Create new workflow or MCP using AI
+ *   meta preferences                  Show current preferences
+ *   meta preferences init             Initialize preferences.ts
+ *   meta preferences edit -p <prompt> Edit preferences with AI
  */
 
 import { defineWorkflow } from "../workflows/shared/base-workflow.ts";
@@ -36,17 +36,17 @@ import {
   workflow as createWorkflow,
 } from "./subflows/create.workflow.ts";
 import {
-  actionEdit as actionConfigEdit,
-  actionInit as actionConfigInit,
-  actionJson as actionConfigJson,
-  actionShow as actionConfigShow,
-  workflow as configWorkflow,
-} from "./subflows/config.workflow.ts";
+  actionEdit as actionPreferencesEdit,
+  actionInit as actionPreferencesInit,
+  actionJson as actionPreferencesJson,
+  actionShow as actionPreferencesShow,
+  workflow as preferencesWorkflow,
+} from "./subflows/preferences.workflow.ts";
 
 export const workflow = defineWorkflow({
   name: "meta",
   description:
-    "Create and manage workflows/MCPs - list, analyze, archive, create, config",
+    "Create and manage workflows/MCPs - list, analyze, archive, create, preferences",
   version: "2.1.0",
   subflows: [
     listWorkflow,
@@ -54,7 +54,7 @@ export const workflow = defineWorkflow({
     archiveWorkflow,
     unarchiveWorkflow,
     createWorkflow,
-    configWorkflow,
+    preferencesWorkflow,
   ],
   examples: [
     ["meta list", "List all workflows and MCPs"],
@@ -63,9 +63,9 @@ export const workflow = defineWorkflow({
     ["meta archive -n old-workflow", "Archive a workflow"],
     ["meta archive -n old-mcp -t mcp", "Archive an MCP"],
     ['meta create -p "A workflow that..."', "Create workflow with AI"],
-    ["meta config", "Show current preferences"],
-    ["meta config init", "Initialize preferences.ts"],
-    ['meta config edit -p "Use codex as default"', "Edit with AI"],
+    ["meta preferences", "Show current preferences"],
+    ["meta preferences init", "Initialize preferences.ts"],
+    ['meta preferences edit -p "Use codex as default"', "Edit with AI"],
   ],
   autoStart: import.meta.main,
 });
@@ -74,13 +74,13 @@ export const workflow = defineWorkflow({
 export {
   actionAnalyze,
   actionArchive,
-  actionConfigEdit,
-  actionConfigInit,
-  actionConfigJson,
-  actionConfigShow,
   actionCreate,
   actionList,
   actionListJson,
+  actionPreferencesEdit,
+  actionPreferencesInit,
+  actionPreferencesJson,
+  actionPreferencesShow,
   actionUnarchive,
 };
 export type { ArchiveType, CreateType };

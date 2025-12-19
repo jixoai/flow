@@ -32,6 +32,7 @@ import {
   type Args as StdArgs,
   parseArgs as stdParseArgs,
 } from "jsr:@std/cli/parse-args";
+import { withPreferences } from "../../common/async-context.ts";
 
 // =============================================================================
 // Types
@@ -482,7 +483,8 @@ export function defineWorkflow<TArgs extends Record<string, ArgConfig>>(
         },
       };
       try {
-        await currentWorkflow.config.handler(args, ctx);
+        // 在 PreferencesContext 中运行 handler，使配置在整个调用链中可用
+        await withPreferences(() => currentWorkflow.config.handler!(args, ctx));
       } catch (error) {
         console.error("Error:", error instanceof Error ? error.message : error);
         Deno.exit(1);
@@ -500,7 +502,10 @@ export function defineWorkflow<TArgs extends Record<string, ArgConfig>>(
   async function execute(args: Partial<InferArgs<TArgs>>): Promise<void> {
     const fullArgs = { _: [], ...args } as InferArgs<TArgs>;
     if (config.handler) {
-      await config.handler(fullArgs, createContext([meta.name], []));
+      // 在 PreferencesContext 中运行 handler
+      await withPreferences(() =>
+        config.handler!(fullArgs, createContext([meta.name], []))
+      );
     }
   }
 
