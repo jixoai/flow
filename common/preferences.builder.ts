@@ -487,7 +487,7 @@ export function initAgentWeights(): void {
   _weightsInitialized = true;
 
   // 检测 Claude Code 环境（任何 truthy 值都算）
-  if (Boolean(Deno.env.get(DETECT_ENV_KEYS.claudeCode))) {
+  if (Deno.env.get(DETECT_ENV_KEYS.claudeCode)) {
     incrementAgentWeight("claude-code");
   }
 
