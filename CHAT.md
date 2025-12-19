@@ -210,3 +210,15 @@ create还要支持`--override`,这里有两种可能:
 AsyncContext.
 
 这样能在整个系统中低入侵地将我们的偏好作用到整个系统中.而不用浪费参数传递
+
+---
+
+我们需要优化一下我们内置的模型偏好的顺序, 我们的底层其实有两套提供方,
+目前claude-code是作为第一提供方,这并不公平. 我们需要改进一下,改成:
+如果env.CLAUDECODE==='1',那么提高 claude-code-agent 的权重, 如果有 CODEX_SANDBOX
+这个字段,不论什么值, 提高codex-agent 的权重. 注意,我们需要将权重写到 env中,
+例如`env.JIXOFLOW_CLAUDECODE_WEIGHT+=1`. 这种设计是因为我们
+
+---
+
+接下来我们将深入改进我们的buildin-mcp/workflow 首先是

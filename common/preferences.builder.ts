@@ -433,17 +433,121 @@ class McpBuilder<
 }
 
 // =============================================================================
+// Agent Weight System
+// =============================================================================
+
+/** 权重环境变量名 */
+const WEIGHT_ENV_KEYS = {
+  claudeCode: "JIXOFLOW_CLAUDECODE_WEIGHT",
+  codex: "JIXOFLOW_CODEX_WEIGHT",
+} as const;
+
+/** 检测环境变量名 */
+const DETECT_ENV_KEYS = {
+  claudeCode: "CLAUDECODE",
+  codex: "CODEX_SANDBOX",
+} as const;
+
+/** 是否已初始化权重 */
+let _weightsInitialized = false;
+
+/**
+ * 获取当前权重
+ */
+function getAgentWeight(agent: "claude-code" | "codex"): number {
+  const key = agent === "claude-code"
+    ? WEIGHT_ENV_KEYS.claudeCode
+    : WEIGHT_ENV_KEYS.codex;
+  const value = Deno.env.get(key);
+  return value ? parseInt(value, 10) || 0 : 0;
+}
+
+/**
+ * 增加权重并写入环境变量
+ */
+function incrementAgentWeight(agent: "claude-code" | "codex"): void {
+  const key = agent === "claude-code"
+    ? WEIGHT_ENV_KEYS.claudeCode
+    : WEIGHT_ENV_KEYS.codex;
+  const current = getAgentWeight(agent);
+  Deno.env.set(key, String(current + 1));
+}
+
+/**
+ * 初始化 Agent 权重
+ *
+ * 在进程初始化时调用，检测当前运行环境并增加相应权重：
+ * - 如果 CLAUDECODE 为 truthy 值，增加 claude-code 权重
+ * - 如果存在 CODEX_SANDBOX，增加 codex 权重
+ *
+ * 权重会写入环境变量，子进程会继承这些权重
+ */
+export function initAgentWeights(): void {
+  if (_weightsInitialized) return;
+  _weightsInitialized = true;
+
+  // 检测 Claude Code 环境（任何 truthy 值都算）
+  if (Deno.env.get(DETECT_ENV_KEYS.claudeCode)) {
+    incrementAgentWeight("claude-code");
+  }
+
+  // 检测 Codex 环境（只要存在该变量即可）
+  if (Deno.env.get(DETECT_ENV_KEYS.codex) !== undefined) {
+    incrementAgentWeight("codex");
+  }
+}
+
+/**
+ * 根据权重获取排序后的内置 profiles 顺序
+ */
+export function getWeightedDefaultOrder(): [
+  "claude-code" | "codex",
+  "claude-code" | "codex",
+] {
+  const claudeWeight = getAgentWeight("claude-code");
+  const codexWeight = getAgentWeight("codex");
+
+  // 权重高的排前面，相同时保持 claude-code 在前（历史兼容）
+  if (codexWeight > claudeWeight) {
+    return ["codex", "claude-code"];
+  }
+  return ["claude-code", "codex"];
+}
+
+/**
+ * 获取指定 agent 的当前权重（用于调试）
+ */
+export { getAgentWeight };
+
+/**
+ * 重置权重初始化状态（仅用于测试）
+ */
+export function _resetWeightsForTesting(): void {
+  _weightsInitialized = false;
+  Deno.env.delete(WEIGHT_ENV_KEYS.claudeCode);
+  Deno.env.delete(WEIGHT_ENV_KEYS.codex);
+}
+
+// 模块加载时自动初始化权重
+initAgentWeights();
+
+// =============================================================================
 // Preferences Builder
 // =============================================================================
 
-/** 默认 AI 配置（内置 profiles） */
-const DEFAULT_AI_CONFIG = {
-  profiles: {
-    "claude-code": { sdk: "claude-code-agent-sdk", options: {} },
-    "codex": { sdk: "codex-agent-sdk", options: {} },
-  },
-  default: ["claude-code", "codex"],
-};
+/**
+ * 获取默认 AI 配置（根据权重动态生成）
+ */
+function getDefaultAiConfig() {
+  const order = getWeightedDefaultOrder();
+  return {
+    profiles: {
+      "claude-code": { sdk: "claude-code-agent-sdk", options: {} },
+      "codex": { sdk: "codex-agent-sdk", options: {} },
+    },
+    default: order,
+  };
+}
 
 /**
  * Preferences 构建器
@@ -553,13 +657,14 @@ class PreferencesBuilder<
   /**
    * 构建最终配置
    * 如果没有显式配置 AI，将使用内置的 claude-code 和 codex profiles
+   * 默认顺序根据环境权重动态决定
    */
   build(): Preferences {
-    // 如果没有显式配置 AI，使用默认配置
+    // 如果没有显式配置 AI，使用默认配置（根据权重排序）
     if (!this._hasAiConfig) {
       return {
         ...this._data,
-        ai: DEFAULT_AI_CONFIG,
+        ai: getDefaultAiConfig(),
       } as unknown as Preferences;
     }
     return this._data as unknown as Preferences;
