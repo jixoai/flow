@@ -150,18 +150,25 @@ create还要支持`--override`,这里有两种可能:
 
 我打算重构 preferences.json:
 
-1. 底层还是这套配置, 但是用户可以使用 preferences.ts 来进行配置, 从而获得类型安全, 并且配置起来可以更加灵活.
-2. 能进行轮询更新, 默认轮询时间是10s, 就是说每过 10s 重新 `import('preferences.ts')` 执行获取配置
+1. 底层还是这套配置, 但是用户可以使用 preferences.ts 来进行配置,
+   从而获得类型安全, 并且配置起来可以更加灵活.
+2. 能进行轮询更新, 默认轮询时间是10s, 就是说每过 10s 重新
+   `import('preferences.ts')` 执行获取配置
    1. 小循环: 如果异常, 那么每间隔3s重新执行一次,直到成功
-   2. 大循环: 每间隔10s重新执行一次,注意不是单纯地固定10s,而是 `loop { await getConfig(); await sleep(10s) }`
-3. 在我们启动 `cli mcp`(指`meta.mcp.ts`)之后, 我需要默认 30s 进行一次重新更新构建, 这样做的好处是, 有些AIAgent在重新通过mcp协议listTools的时候, 能确保获取到最新的内容
-   - 如果不这样做, 一些Agent能长期工作不做释放, 而我们又是那种自发现的机制. 所以我们自己进程不重启也要能支持自动刷新重载
-4. `meta.mcp.ts`目前只提供了一个workflow工具, 我还需要提供一个 reload 工具, 是方便AIAgent能主动进行获取, 返回的内容其实就是workflow这个工具的description, 这个description包含了所有可用的workflow
+   2. 大循环: 每间隔10s重新执行一次,注意不是单纯地固定10s,而是
+      `loop { await getConfig(); await sleep(10s) }`
+3. 在我们启动 `cli mcp`(指`meta.mcp.ts`)之后, 我需要默认 30s
+   进行一次重新更新构建, 这样做的好处是,
+   有些AIAgent在重新通过mcp协议listTools的时候, 能确保获取到最新的内容
+   - 如果不这样做, 一些Agent能长期工作不做释放, 而我们又是那种自发现的机制.
+     所以我们自己进程不重启也要能支持自动刷新重载
+4. `meta.mcp.ts`目前只提供了一个workflow工具, 我还需要提供一个 reload 工具,
+   是方便AIAgent能主动进行获取, 返回的内容其实就是workflow这个工具的description,
+   这个description包含了所有可用的workflow
 5. 重新检查一下 preferences 的配置,是否有全面应用,是否有全面测试
 
 ---
 
-接下来, 我们需要将main分支设置为保护分支.
-所有的工作必须通过pr来合并到主分支.
+接下来, 我们需要将main分支设置为保护分支. 所有的工作必须通过pr来合并到主分支.
 
 因此我需要你配置一套严格的CI/CD.并且将我们的docs发布到github-page
