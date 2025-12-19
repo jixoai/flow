@@ -978,3 +978,168 @@ Deno.test("Complete Configuration Scenarios", async (t) => {
     assertEquals(ai.default[2], "codex-fallback");
   });
 });
+
+// =============================================================================
+// Agent Weight System 测试
+// =============================================================================
+
+import {
+  _resetWeightsForTesting,
+  getAgentWeight,
+  getWeightedDefaultOrder,
+  initAgentWeights,
+} from "./preferences.builder.ts";
+
+Deno.test("Agent Weight System", async (t) => {
+  // 每个测试前重置环境
+  const originalClaudeCode = Deno.env.get("CLAUDECODE");
+  const originalCodexSandbox = Deno.env.get("CODEX_SANDBOX");
+
+  await t.step("初始状态：权重相同时 claude-code 优先", () => {
+    _resetWeightsForTesting();
+    Deno.env.delete("CLAUDECODE");
+    Deno.env.delete("CODEX_SANDBOX");
+    initAgentWeights();
+
+    const order = getWeightedDefaultOrder();
+    assertEquals(order, ["claude-code", "codex"]);
+    assertEquals(getAgentWeight("claude-code"), 0);
+    assertEquals(getAgentWeight("codex"), 0);
+  });
+
+  await t.step("CLAUDECODE=1 时 claude-code 权重增加", () => {
+    _resetWeightsForTesting();
+    Deno.env.set("CLAUDECODE", "1");
+    Deno.env.delete("CODEX_SANDBOX");
+    initAgentWeights();
+
+    assertEquals(getAgentWeight("claude-code"), 1);
+    assertEquals(getAgentWeight("codex"), 0);
+    assertEquals(getWeightedDefaultOrder(), ["claude-code", "codex"]);
+  });
+
+  await t.step("CODEX_SANDBOX 存在时 codex 权重增加", () => {
+    _resetWeightsForTesting();
+    Deno.env.delete("CLAUDECODE");
+    Deno.env.set("CODEX_SANDBOX", "/some/path");
+    initAgentWeights();
+
+    assertEquals(getAgentWeight("claude-code"), 0);
+    assertEquals(getAgentWeight("codex"), 1);
+    assertEquals(getWeightedDefaultOrder(), ["codex", "claude-code"]);
+  });
+
+  await t.step("CODEX_SANDBOX 为空字符串也算存在", () => {
+    _resetWeightsForTesting();
+    Deno.env.delete("CLAUDECODE");
+    Deno.env.set("CODEX_SANDBOX", "");
+    initAgentWeights();
+
+    assertEquals(getAgentWeight("codex"), 1);
+    assertEquals(getWeightedDefaultOrder(), ["codex", "claude-code"]);
+  });
+
+  await t.step("两个环境变量同时存在时两个权重都增加", () => {
+    _resetWeightsForTesting();
+    Deno.env.set("CLAUDECODE", "1");
+    Deno.env.set("CODEX_SANDBOX", "/sandbox");
+    initAgentWeights();
+
+    assertEquals(getAgentWeight("claude-code"), 1);
+    assertEquals(getAgentWeight("codex"), 1);
+    // 权重相同时 claude-code 优先（历史兼容）
+    assertEquals(getWeightedDefaultOrder(), ["claude-code", "codex"]);
+  });
+
+  await t.step("CLAUDECODE 为空字符串时不增加权重", () => {
+    _resetWeightsForTesting();
+    Deno.env.set("CLAUDECODE", "");
+    Deno.env.delete("CODEX_SANDBOX");
+    initAgentWeights();
+
+    assertEquals(getAgentWeight("claude-code"), 0);
+  });
+
+  await t.step("CLAUDECODE 为任意 truthy 值都增加权重", () => {
+    _resetWeightsForTesting();
+    Deno.env.set("CLAUDECODE", "true");
+    Deno.env.delete("CODEX_SANDBOX");
+    initAgentWeights();
+
+    assertEquals(getAgentWeight("claude-code"), 1);
+  });
+
+  await t.step("权重可以累积（模拟嵌套 Agent）", () => {
+    _resetWeightsForTesting();
+    // 第一层 Agent 检测到 CLAUDECODE
+    Deno.env.set("CLAUDECODE", "1");
+    initAgentWeights();
+    assertEquals(getAgentWeight("claude-code"), 1);
+
+    // 重置初始化标志，模拟子 Agent 启动
+    // 但保留权重环境变量（子进程继承）
+    const currentWeight = Deno.env.get("JIXOFLOW_CLAUDECODE_WEIGHT");
+    _resetWeightsForTesting();
+    Deno.env.set("JIXOFLOW_CLAUDECODE_WEIGHT", currentWeight!);
+    Deno.env.set("CLAUDECODE", "1");
+    initAgentWeights();
+
+    // 权重累积
+    assertEquals(getAgentWeight("claude-code"), 2);
+  });
+
+  await t.step("build() 使用权重排序的默认配置", () => {
+    _resetWeightsForTesting();
+    Deno.env.delete("CLAUDECODE");
+    Deno.env.set("CODEX_SANDBOX", "/sandbox");
+    initAgentWeights();
+
+    const config = definePreferences((_ctx, p) => p.build());
+    const ai = config.ai as unknown as { default: string[] };
+
+    // codex 权重更高，排在前面
+    assertEquals(ai.default[0], "codex");
+    assertEquals(ai.default[1], "claude-code");
+  });
+
+  await t.step("用户显式配置覆盖权重排序", () => {
+    _resetWeightsForTesting();
+    Deno.env.delete("CLAUDECODE");
+    Deno.env.set("CODEX_SANDBOX", "/sandbox");
+    initAgentWeights();
+
+    // 环境权重让 codex 优先，但用户显式配置 claude-code 优先
+    const config = definePreferences((_ctx, p) =>
+      p
+        .ai((ai) =>
+          ai
+            .profile(
+              "claude-code",
+              (profile) => profile.useClaudeCodeAgentSdk(),
+            )
+            .profile("codex", (profile) => profile.useCodexAgent())
+            .default("claude-code", "codex")
+        )
+        .build()
+    );
+
+    const ai = config.ai as unknown as { default: string[] };
+    // 用户配置优先
+    assertEquals(ai.default[0], "claude-code");
+    assertEquals(ai.default[1], "codex");
+  });
+
+  // 清理：恢复原始环境变量
+  _resetWeightsForTesting();
+  if (originalClaudeCode !== undefined) {
+    Deno.env.set("CLAUDECODE", originalClaudeCode);
+  } else {
+    Deno.env.delete("CLAUDECODE");
+  }
+  if (originalCodexSandbox !== undefined) {
+    Deno.env.set("CODEX_SANDBOX", originalCodexSandbox);
+  } else {
+    Deno.env.delete("CODEX_SANDBOX");
+  }
+  initAgentWeights();
+});
