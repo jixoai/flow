@@ -6,6 +6,8 @@
  * - Get user technical preferences
  * - Get coding style guidelines
  * - Validate decisions against user preferences
+ *
+ * Supports custom prompts from user/prompts/user-proxy.md
  */
 
 import {
@@ -16,8 +18,11 @@ import {
   printMcpHelp,
   z,
 } from "./shared/base-mcp.ts";
+import { join } from "jsr:@std/path";
+import { USER_PROMPTS_DIR } from "../common/paths.ts";
 
 const MCP_NAME = "user-proxy";
+const USER_PROXY_PROMPT_PATH = join(USER_PROMPTS_DIR, "user-proxy.md");
 
 // =============================================================================
 // User Preferences Data
@@ -242,10 +247,41 @@ export function validateCodeStyle(issue: string): {
 }
 
 // =============================================================================
+// Custom Prompt Loading
+// =============================================================================
+
+let cachedUserPrompt: string | null = null;
+
+/**
+ * Load user custom prompt from user/prompts/user-proxy.md
+ * Falls back to built-in prompt if file doesn't exist
+ */
+export async function loadUserPrompt(): Promise<string | null> {
+  if (cachedUserPrompt !== null) {
+    return cachedUserPrompt || null;
+  }
+
+  try {
+    cachedUserPrompt = await Deno.readTextFile(USER_PROXY_PROMPT_PATH);
+    return cachedUserPrompt;
+  } catch {
+    cachedUserPrompt = "";
+    return null;
+  }
+}
+
+/**
+ * Clear cached user prompt (for testing or hot reload)
+ */
+export function clearUserPromptCache(): void {
+  cachedUserPrompt = null;
+}
+
+// =============================================================================
 // System Prompts (exported for workflows)
 // =============================================================================
 
-export const USER_PROXY_SYSTEM_PROMPT =
+const BUILTIN_USER_PROXY_SYSTEM_PROMPT =
   `You are User-Proxy - representing user consciousness.
 
 ## ROLE
@@ -268,6 +304,19 @@ When asked for advice:
 - File size ~200 lines
 - Human-centered design
 - First principles thinking`;
+
+/**
+ * Get the user proxy system prompt
+ * Returns custom prompt from user/prompts/user-proxy.md if exists,
+ * otherwise returns the built-in prompt
+ */
+export async function getUserProxySystemPrompt(): Promise<string> {
+  const userPrompt = await loadUserPrompt();
+  return userPrompt || BUILTIN_USER_PROXY_SYSTEM_PROMPT;
+}
+
+/** @deprecated Use getUserProxySystemPrompt() instead */
+export const USER_PROXY_SYSTEM_PROMPT = BUILTIN_USER_PROXY_SYSTEM_PROMPT;
 
 export const USER_RULES_MARKDOWN = `
 ## Technical Preferences
@@ -391,6 +440,24 @@ const getUserRulesTool = defineTool({
   handler: async () => ({ markdown: USER_RULES_MARKDOWN }),
 });
 
+const getSystemPromptTool = defineTool({
+  name: "user_get_system_prompt",
+  description:
+    "Get user proxy system prompt. Returns custom prompt from user/prompts/user-proxy.md if exists.",
+  inputSchema: z.object({}),
+  outputSchema: z.object({
+    prompt: z.string(),
+    isCustom: z.boolean(),
+  }),
+  handler: async () => {
+    const userPrompt = await loadUserPrompt();
+    return {
+      prompt: userPrompt || BUILTIN_USER_PROXY_SYSTEM_PROMPT,
+      isCustom: userPrompt !== null,
+    };
+  },
+});
+
 const consultTool = defineTool({
   name: "user_consult",
   description: "Get consultation result for a technical decision.",
@@ -441,6 +508,7 @@ export const allTools: AnyTypedTool[] = [
   validateTechChoiceTool,
   validateStyleTool,
   getUserRulesTool,
+  getSystemPromptTool,
   consultTool,
 ];
 
