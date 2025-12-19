@@ -9,18 +9,61 @@
  * 替代原 agents/coder.md
  */
 
-import { dirname, fromFileUrl, join } from "jsr:@std/path";
 import { defineWorkflow, type SubflowDef } from "./shared/base-workflow.ts";
 import { aiResume, createAiQueryBuilder } from "../mcps/ai.mcp.ts";
 import { USER_RULES_MARKDOWN } from "../mcps/user-proxy.mcp.ts";
+import {
+  getBuiltinVars,
+  readAndRenderPrompt,
+  readPrompt,
+} from "../common/prompt-loader.ts";
+import { mergeToolsConfig } from "../common/tools-merger.ts";
+import { getContextWorkflowConfig } from "../common/async-context.ts";
+import type { CoderConfig } from "./shared/workflow-config.schema.ts";
 
-const __dirname = dirname(fromFileUrl(import.meta.url));
-const PROMPTS_DIR = join(__dirname, "coder/prompts");
+// =============================================================================
+// Constants
+// =============================================================================
 
-// Load system prompt
+/** 默认允许的工具 */
+const DEFAULT_ALLOW_TOOLS = [
+  "Read",
+  "Write",
+  "Edit",
+  "MultiEdit",
+  "Glob",
+  "Grep",
+  "Bash",
+  "Task",
+];
+
+/** 默认禁用的工具 */
+const DEFAULT_DISALLOW_TOOLS = ["WebSearch", "WebFetch"];
+
+// =============================================================================
+// Prompt Loading
+// =============================================================================
+
+/**
+ * 加载 system prompt
+ *
+ * 优先级: user/prompts/coder/ > workflows/coder/prompts/
+ */
 async function loadSystemPrompt(): Promise<string> {
-  const base = await Deno.readTextFile(join(PROMPTS_DIR, "system.md"));
-  return base + "\n\n" + USER_RULES_MARKDOWN;
+  // 尝试使用 prompt-loader
+  const vars = {
+    ...getBuiltinVars(),
+    USER_RULES: USER_RULES_MARKDOWN,
+  };
+
+  const rendered = await readAndRenderPrompt("coder", vars);
+  if (rendered) {
+    return rendered;
+  }
+
+  // 回退到直接读取（兼容旧逻辑）
+  const base = await readPrompt("coder");
+  return (base ?? "") + "\n\n" + USER_RULES_MARKDOWN;
 }
 
 // Lazy load subflows
@@ -54,7 +97,28 @@ export const workflow = defineWorkflow({
   handler: async (args) => {
     if (args.prompt) {
       console.error("[coder] Starting (default mode)...");
+
+      // 获取用户配置
+      const config = getContextWorkflowConfig<CoderConfig>("coder");
+
+      // 合并工具配置
+      const { allow, disallow } = mergeToolsConfig(
+        DEFAULT_ALLOW_TOOLS,
+        DEFAULT_DISALLOW_TOOLS,
+        config?.tools,
+      );
+
+      // 获取权限模式
+      const permissionMode = config?.permissionMode ?? "acceptEdits";
+
+      // 加载提示词
       const systemPrompt = await loadSystemPrompt();
+
+      // 添加自定义指令
+      const finalPrompt = config?.prompts?.customInstructions
+        ? systemPrompt + "\n\n## Custom Instructions\n\n" +
+          config.prompts.customInstructions
+        : systemPrompt;
 
       if (args.resume) {
         const result = await aiResume({
@@ -68,19 +132,10 @@ export const workflow = defineWorkflow({
 
       const result = await createAiQueryBuilder()
         .prompt(args.prompt)
-        .systemPrompt(systemPrompt)
-        .allowTools([
-          "Read",
-          "Write",
-          "Edit",
-          "MultiEdit",
-          "Glob",
-          "Grep",
-          "Bash",
-          "Task",
-        ])
-        .disallowTools(["WebSearch", "WebFetch"])
-        .permissionMode("acceptEdits")
+        .systemPrompt(finalPrompt)
+        .allowTools(allow)
+        .disallowTools(disallow)
+        .permissionMode(permissionMode)
         .cwd(Deno.cwd())
         .executeWithSession();
 
