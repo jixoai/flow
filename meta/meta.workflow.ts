@@ -8,6 +8,9 @@
  *   meta archive -n <name>       Archive a workflow or MCP
  *   meta unarchive -n <name>     Restore from archive
  *   meta create -p <prompt>      Create new workflow or MCP using AI
+ *   meta config                  Show current preferences
+ *   meta config init             Initialize preferences.ts
+ *   meta config edit -p <prompt> Edit preferences with AI
  */
 
 import { defineWorkflow } from "../workflows/shared/base-workflow.ts";
@@ -32,18 +35,26 @@ import {
   type CreateType,
   workflow as createWorkflow,
 } from "./subflows/create.workflow.ts";
+import {
+  actionEdit as actionConfigEdit,
+  actionInit as actionConfigInit,
+  actionJson as actionConfigJson,
+  actionShow as actionConfigShow,
+  workflow as configWorkflow,
+} from "./subflows/config.workflow.ts";
 
 export const workflow = defineWorkflow({
   name: "meta",
   description:
-    "Create and manage workflows/MCPs - list, analyze, archive, create with AI",
-  version: "2.0.0",
+    "Create and manage workflows/MCPs - list, analyze, archive, create, config",
+  version: "2.1.0",
   subflows: [
     listWorkflow,
     analyzeWorkflow,
     archiveWorkflow,
     unarchiveWorkflow,
     createWorkflow,
+    configWorkflow,
   ],
   examples: [
     ["meta list", "List all workflows and MCPs"],
@@ -52,6 +63,9 @@ export const workflow = defineWorkflow({
     ["meta archive -n old-workflow", "Archive a workflow"],
     ["meta archive -n old-mcp -t mcp", "Archive an MCP"],
     ['meta create -p "A workflow that..."', "Create workflow with AI"],
+    ["meta config", "Show current preferences"],
+    ["meta config init", "Initialize preferences.ts"],
+    ['meta config edit -p "Use codex as default"', "Edit with AI"],
   ],
   autoStart: import.meta.main,
 });
@@ -60,6 +74,10 @@ export const workflow = defineWorkflow({
 export {
   actionAnalyze,
   actionArchive,
+  actionConfigEdit,
+  actionConfigInit,
+  actionConfigJson,
+  actionConfigShow,
   actionCreate,
   actionList,
   actionListJson,
