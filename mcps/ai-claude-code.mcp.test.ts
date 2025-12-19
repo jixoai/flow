@@ -325,7 +325,7 @@ describe("Live Tests", {
     assertEquals(result.success, true, `Query failed: ${result.error}`);
     assertExists(result.output);
     assertExists(result.sessionId);
-    testSessionId = result.sessionId;
+    _testSessionId = result.sessionId;
   });
 
   it("should execute query with session", async () => {
