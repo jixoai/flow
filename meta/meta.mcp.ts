@@ -4,7 +4,12 @@
  *
  * Provides workflow execution capability to AI agents.
  * - workflow(name, args): Execute any workflow
+ * - reload(): Refresh workflow list and return updated description
  * - buildMetaMcp(): Package workflows into an MCP server
+ *
+ * Features:
+ * - Auto-refresh: Every 30s automatically rescan workflows
+ * - Hot reload: AI agents can call reload() to manually refresh
  */
 
 import {
@@ -16,16 +21,23 @@ import {
   z,
 } from "../mcps/shared/base-mcp.ts";
 import { dirname, fromFileUrl, join } from "jsr:@std/path";
+import { USER_WORKFLOWS_DIR, WORKFLOWS_DIR } from "../common/paths.ts";
+import {
+  isWorkflowDisabled,
+  loadPreferences,
+  startPolling as startPreferencesPolling,
+} from "../common/preferences.ts";
 
 const MCP_NAME = "meta";
+
+/** 自动刷新间隔（毫秒） */
+const AUTO_REFRESH_INTERVAL_MS = 30_000;
 
 // =============================================================================
 // Paths
 // =============================================================================
 
 const __dirname = dirname(fromFileUrl(import.meta.url));
-const ROOT_DIR = dirname(__dirname);
-const WORKFLOWS_DIR = join(ROOT_DIR, "workflows");
 
 // =============================================================================
 // Types
@@ -36,6 +48,7 @@ export interface WorkflowInfo {
   description: string;
   path: string;
   mode?: "ai" | "programmatic" | "multi";
+  isUserOverride?: boolean;
 }
 
 export interface MetaMcpConfig {
@@ -47,40 +60,79 @@ export interface MetaMcpConfig {
   name?: string;
   /** Auto-start server */
   autoStart?: boolean;
+  /** Auto-refresh workflows every 30s (default: false) */
+  autoRefresh?: boolean;
 }
 
 // =============================================================================
 // Workflow Discovery
 // =============================================================================
 
-async function scanWorkflows(): Promise<WorkflowInfo[]> {
-  const workflows: WorkflowInfo[] = [];
+async function scanWorkflowsFromDir(
+  dir: string,
+): Promise<Map<string, { path: string }>> {
+  const result = new Map<string, { path: string }>();
 
   try {
-    for await (const entry of Deno.readDir(WORKFLOWS_DIR)) {
+    for await (const entry of Deno.readDir(dir)) {
       if (
         entry.isFile &&
         entry.name.endsWith(".workflow.ts") &&
         !entry.name.startsWith("_")
       ) {
         const name = entry.name.replace(".workflow.ts", "");
-        const filePath = join(WORKFLOWS_DIR, entry.name);
-        const info = await getWorkflowInfo(filePath);
-        workflows.push({ name, path: filePath, ...info });
+        result.set(name, { path: join(dir, entry.name) });
       }
     }
   } catch {
     // Directory may not exist
   }
 
+  return result;
+}
+
+async function scanWorkflows(): Promise<WorkflowInfo[]> {
+  // Load preferences to check disabled workflows
+  await loadPreferences();
+
+  // Scan builtin workflows first
+  const builtinWorkflows = await scanWorkflowsFromDir(WORKFLOWS_DIR);
+
+  // Scan user workflows (will override builtin)
+  const userWorkflows = await scanWorkflowsFromDir(USER_WORKFLOWS_DIR);
+
+  // Merge: user workflows take priority
+  const mergedWorkflows = new Map(builtinWorkflows);
+  for (const [name, info] of userWorkflows) {
+    mergedWorkflows.set(name, info);
+  }
+
   // Add meta workflow
   const metaWorkflowPath = join(__dirname, "meta.workflow.ts");
   try {
     await Deno.stat(metaWorkflowPath);
-    const info = await getWorkflowInfo(metaWorkflowPath);
-    workflows.push({ name: "meta", path: metaWorkflowPath, ...info });
+    mergedWorkflows.set("meta", { path: metaWorkflowPath });
   } catch {
     // meta.workflow.ts doesn't exist
+  }
+
+  // Build workflow info list, filtering disabled workflows
+  const workflows: WorkflowInfo[] = [];
+  for (const [name, { path }] of mergedWorkflows) {
+    // Skip disabled workflows
+    if (await isWorkflowDisabled(name)) {
+      continue;
+    }
+
+    const info = await getWorkflowInfo(path);
+    const isUserOverride = userWorkflows.has(name) &&
+      builtinWorkflows.has(name);
+    workflows.push({
+      name,
+      path,
+      ...info,
+      isUserOverride,
+    });
   }
 
   return workflows.sort((a, b) => a.name.localeCompare(b.name));
@@ -137,8 +189,11 @@ async function buildToolDescription(filter?: string[]): Promise<string> {
 
   const workflowList = workflows
     .map((w) => {
-      const modeTag = w.mode ? ` [${w.mode}]` : "";
-      return `- ${w.name}: ${w.description}${modeTag}`;
+      const tags: string[] = [];
+      if (w.mode) tags.push(w.mode);
+      if (w.isUserOverride) tags.push("user");
+      const tagStr = tags.length > 0 ? ` [${tags.join(", ")}]` : "";
+      return `- ${w.name}: ${w.description}${tagStr}`;
     })
     .join("\n");
 
@@ -315,6 +370,35 @@ async function createWorkflowTool(filter?: string[]): Promise<AnyTypedTool> {
   });
 }
 
+/**
+ * 创建 reload 工具
+ *
+ * 用于 AI Agent 主动刷新 workflow 列表
+ */
+function createReloadTool(
+  refreshCallback: () => Promise<string>,
+): AnyTypedTool {
+  return defineTool({
+    name: "reload",
+    description:
+      "Refresh the workflow list. Call this to get the latest available workflows after adding/removing workflow files.",
+    inputSchema: z.object({}),
+    outputSchema: z.object({
+      success: z.boolean(),
+      description: z.string().describe("Updated workflow tool description"),
+      refreshedAt: z.string().describe("ISO timestamp of refresh"),
+    }),
+    handler: async () => {
+      const description = await refreshCallback();
+      return {
+        success: true,
+        description,
+        refreshedAt: new Date().toISOString(),
+      };
+    },
+  });
+}
+
 // =============================================================================
 // buildMetaMcp - Package Workflows into MCP
 // =============================================================================
@@ -324,8 +408,13 @@ async function createWorkflowTool(filter?: string[]): Promise<AnyTypedTool> {
  *
  * This enables AI agents to:
  * 1. Execute workflows via the `workflow` tool
- * 2. Chain workflows together
- * 3. Make decisions about which workflow to run
+ * 2. Call `reload` to refresh the workflow list
+ * 3. Chain workflows together
+ * 4. Make decisions about which workflow to run
+ *
+ * Features:
+ * - Auto-refresh: Every 30s automatically rescan workflows (when autoRefresh=true)
+ * - Hot reload: AI agents can call reload() to manually refresh
  *
  * @example
  * ```typescript
@@ -337,13 +426,13 @@ async function createWorkflowTool(filter?: string[]): Promise<AnyTypedTool> {
  * // Use with createAiQueryBuilder:
  * createAiQueryBuilder()
  *   .mcpServers({ meta: metaMcp.serverConfig })
- *   .allowTools(["mcp__meta__workflow"])
+ *   .allowTools(["mcp__meta__workflow", "mcp__meta__reload"])
  * ```
  *
  * @example
  * ```typescript
- * // Start as standalone server:
- * const server = await buildMetaMcp({ autoStart: true });
+ * // Start as standalone server with auto-refresh:
+ * const server = await buildMetaMcp({ autoStart: true, autoRefresh: true });
  * ```
  */
 export async function buildMetaMcp(config: MetaMcpConfig = {}) {
@@ -352,10 +441,20 @@ export async function buildMetaMcp(config: MetaMcpConfig = {}) {
     extraTools = [],
     name = MCP_NAME,
     autoStart = false,
+    autoRefresh = false,
   } = config;
 
+  // 刷新回调函数
+  const refreshWorkflows = async (): Promise<string> => {
+    // 强制重新加载配置
+    await loadPreferences(true);
+    // 重新构建工具描述
+    return await buildToolDescription(workflowFilter);
+  };
+
   const workflowTool = await createWorkflowTool(workflowFilter);
-  const tools = [workflowTool, ...extraTools];
+  const reloadTool = createReloadTool(refreshWorkflows);
+  const tools = [workflowTool, reloadTool, ...extraTools];
 
   const server = createMcpServer({
     name,
@@ -365,10 +464,61 @@ export async function buildMetaMcp(config: MetaMcpConfig = {}) {
     autoStart,
   });
 
+  // 自动刷新控制
+  let autoRefreshAbortController: AbortController | null = null;
+
+  const startAutoRefresh = () => {
+    if (autoRefreshAbortController) return;
+
+    autoRefreshAbortController = new AbortController();
+    const signal = autoRefreshAbortController.signal;
+
+    (async () => {
+      while (!signal.aborted) {
+        try {
+          await new Promise((resolve, reject) => {
+            const timeout = setTimeout(resolve, AUTO_REFRESH_INTERVAL_MS);
+            signal.addEventListener("abort", () => {
+              clearTimeout(timeout);
+              reject(new DOMException("Aborted", "AbortError"));
+            });
+          });
+
+          if (!signal.aborted) {
+            await refreshWorkflows();
+            console.error(
+              `[meta.mcp] Auto-refreshed workflows at ${
+                new Date().toISOString()
+              }`,
+            );
+          }
+        } catch (e) {
+          if (e instanceof DOMException && e.name === "AbortError") {
+            return;
+          }
+          console.error("[meta.mcp] Auto-refresh error:", e);
+        }
+      }
+    })();
+  };
+
+  const stopAutoRefresh = () => {
+    autoRefreshAbortController?.abort();
+    autoRefreshAbortController = null;
+  };
+
+  // 如果配置了自动刷新，立即启动
+  if (autoRefresh) {
+    startAutoRefresh();
+  }
+
   return {
     server,
     tools,
     start: () => server.start(),
+    startAutoRefresh,
+    stopAutoRefresh,
+    refresh: refreshWorkflows,
   };
 }
 
@@ -386,7 +536,18 @@ if (import.meta.main) {
     Deno.exit(0);
   }
 
-  const { server } = await buildMetaMcp({ autoStart: false });
+  // 启动配置轮询
+  startPreferencesPolling();
+
+  // 构建并启动 MCP 服务器（启用自动刷新）
+  const { server, startAutoRefresh } = await buildMetaMcp({
+    autoStart: false,
+    autoRefresh: true,
+  });
+
+  // 启动自动刷新
+  startAutoRefresh();
+
   server.start();
 }
 

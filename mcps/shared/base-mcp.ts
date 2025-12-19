@@ -31,7 +31,10 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
-import type { ImageContent, TextContent } from "@modelcontextprotocol/sdk/types.js";
+import type {
+  ImageContent,
+  TextContent,
+} from "@modelcontextprotocol/sdk/types.js";
 import { z, type ZodSchema, type ZodType } from "zod";
 
 // Re-export zod for convenience

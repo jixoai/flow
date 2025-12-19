@@ -6,13 +6,17 @@ JixoFlow 支持通过 `user/` 目录扩展和覆盖内置功能。
 
 ```
 $JIXOHOME/
-├── workflows/           # 内置 Workflow
-├── mcps/                # 内置 MCP
-├── user/                # 用户自定义
-│   ├── workflows/       # 自定义 Workflow
-│   ├── mcps/            # 自定义 MCP
-│   └── prompts/         # 自定义提示词
-└── preferences.json     # 全局配置
+├── workflows/              # 内置 Workflow
+├── mcps/                   # 内置 MCP
+├── user/                   # 用户自定义
+│   ├── preferences.json    # 用户配置
+│   ├── preferences.schema.json  # JSON Schema（供编辑器智能提示）
+│   ├── workflows/          # 自定义 Workflow（同名覆盖内置）
+│   ├── mcps/               # 自定义 MCP（同名覆盖内置）
+│   └── prompts/            # 自定义提示词
+│       └── user-proxy.md   # user-proxy.mcp 的自定义提示词
+└── common/
+    └── preferences.ts      # 配置读取逻辑
 ```
 
 ## 使用 meta create 创建
@@ -98,7 +102,7 @@ export const server = createMcpServer({
 
 ### user-proxy.md
 
-`user-proxy.mcp` 会读取此文件作为用户偏好：
+`user-proxy.mcp` 会读取此文件作为用户偏好提示词：
 
 ```markdown
 <!-- user/prompts/user-proxy.md -->
@@ -124,20 +128,58 @@ export const server = createMcpServer({
 - 提交信息使用 Conventional Commits
 ```
 
+### 程序访问
+
+```typescript
+import {
+  getUserProxySystemPrompt,
+  loadUserPrompt,
+} from "../mcps/user-proxy.mcp.ts";
+
+// 获取系统提示词（自动优先读取用户自定义）
+const systemPrompt = await getUserProxySystemPrompt();
+
+// 直接读取用户自定义提示词（如果不存在返回 null）
+const userPrompt = await loadUserPrompt();
+```
+
 ## 加载优先级
 
 ```
 ┌─────────────────────────────────────────────────────┐
 │                  meta.mcp 发现                       │
 │                                                      │
-│   1. 扫描 user/workflows/ 和 user/mcps/             │
-│   2. 扫描内置 workflows/ 和 mcps/                   │
-│   3. 合并结果（用户版本优先）                        │
+│   1. 加载 user/preferences.json（与默认值合并）     │
+│   2. 扫描 user/workflows/ 和 user/mcps/             │
+│   3. 扫描内置 workflows/ 和 mcps/                   │
+│   4. 合并结果（用户版本优先）                        │
+│   5. 过滤掉 preferences 中 disabled=true 的项       │
 │                                                      │
 └─────────────────────────────────────────────────────┘
 ```
 
 同名时用户版本**完全覆盖**内置版本，不会合并。
+
+## 禁用 Workflow/MCP
+
+通过 `preferences.json` 可以禁用特定的 Workflow 或 MCP：
+
+```json
+{
+  "workflows": {
+    "git-committer": {
+      "disabled": true
+    }
+  },
+  "mcps": {
+    "memory": {
+      "disabled": true
+    }
+  }
+}
+```
+
+被禁用的 Workflow/MCP 不会出现在 `meta list` 中，也无法通过 `meta.mcp` 执行。
 
 ## 最佳实践
 
