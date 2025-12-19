@@ -5,3 +5,4 @@ user/
 .source.json
 .zed/
 .vscode/
+.git-workflow/
