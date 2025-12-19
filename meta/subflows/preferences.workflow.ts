@@ -1,10 +1,10 @@
 /**
- * Config Subflow - Manage preferences configuration
+ * Preferences Subflow - Manage preferences configuration
  *
  * Usage:
- *   meta config              Show current preferences
- *   meta config init         Initialize preferences.ts from example
- *   meta config edit -p ...  Edit preferences with AI assistance
+ *   meta preferences              Show current preferences
+ *   meta preferences init         Initialize preferences.ts from example
+ *   meta preferences edit -p ...  Edit preferences with AI assistance
  */
 
 import { defineWorkflow } from "../../workflows/shared/base-workflow.ts";
@@ -15,6 +15,7 @@ import {
   PREFERENCES_TS_FILE_PATH,
 } from "../../common/preferences.ts";
 import { USER_DIR } from "../../common/paths.ts";
+import { loadWhitebookAsPrompt } from "../../common/whitebook.ts";
 import { join } from "jsr:@std/path";
 
 const PREFERENCES_TS_EXAMPLE_PATH = join(USER_DIR, "preferences.example.ts");
@@ -87,9 +88,11 @@ async function actionShow(): Promise<void> {
   }
 
   console.log("\n---");
-  console.log("Run `meta config init` to create preferences.ts from example.");
   console.log(
-    "Run `meta config edit -p <prompt>` to modify with AI assistance.",
+    "Run `meta preferences init` to create preferences.ts from example.",
+  );
+  console.log(
+    "Run `meta preferences edit -p <prompt>` to modify with AI assistance.",
   );
 }
 
@@ -126,6 +129,8 @@ async function actionInit(force = false): Promise<void> {
 
 /**
  * Edit preferences with AI assistance
+ *
+ * 使用白皮书文档作为 AI 提示词来源（Single Source of Truth）
  */
 async function actionEdit(prompt: string): Promise<void> {
   // Lazy import to avoid circular dependencies
@@ -140,6 +145,11 @@ async function actionEdit(prompt: string): Promise<void> {
 
   const currentContent = await Deno.readTextFile(PREFERENCES_TS_FILE_PATH);
 
+  // 从白皮书加载 AI 指令（Single Source of Truth）
+  const apiDocs = await loadWhitebookAsPrompt(
+    "06-configuration/preferences-api.md",
+  );
+
   const systemPrompt = `You are helping the user configure JixoFlow preferences.
 
 ## Current preferences.ts
@@ -148,24 +158,20 @@ async function actionEdit(prompt: string): Promise<void> {
 ${currentContent}
 \`\`\`
 
-## Preferences Schema
+## Preferences API Reference
 
-The Preferences interface supports:
-- \`ai.defaultAgent\`: Default AI agent ("claude-code" | "codex")
-- \`ai.agents.<name>\`: Agent config { enabled, model, options }
-- \`ai.fallbackChain\`: Array of agent names for fallback
-- \`ai.retry\`: Retry config { maxAttempts, initialDelayMs, maxDelayMs, backoffMultiplier, retryOn }
-- \`workflows.<name>\`: Workflow config { preferredAgent, disabled, options }
-- \`mcps.<name>\`: MCP config { disabled, options }
+${apiDocs}
 
-## Instructions
+## File Location
+
+The preferences file is at: ${PREFERENCES_TS_FILE_PATH}
+
+## Task
 
 1. Understand what the user wants to change
 2. Modify the preferences.ts file accordingly
-3. Use proper TypeScript syntax with \`satisfies Preferences\`
-4. Keep the file well-formatted and commented
-
-The file is at: ${PREFERENCES_TS_FILE_PATH}`;
+3. Use the \`definePreferences\` builder pattern
+4. Keep the file well-formatted and commented`;
 
   const mcpServers = await getMcpServerConfigs("user-proxy");
 
@@ -193,7 +199,7 @@ async function actionJson(): Promise<string> {
 // =============================================================================
 
 export const workflow = defineWorkflow({
-  name: "config",
+  name: "preferences",
   description: "Manage preferences configuration",
   args: {
     prompt: {
@@ -224,7 +230,7 @@ export const workflow = defineWorkflow({
         if (!args.prompt) {
           console.error("Error: --prompt (-p) is required for edit command");
           console.log(
-            "Usage: meta config edit -p 'Change default agent to codex'",
+            "Usage: meta preferences edit -p 'Change default agent to codex'",
           );
           Deno.exit(1);
         }

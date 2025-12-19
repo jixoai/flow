@@ -172,3 +172,41 @@ create还要支持`--override`,这里有两种可能:
 接下来, 我们需要将main分支设置为保护分支. 所有的工作必须通过pr来合并到主分支.
 
 因此我需要你配置一套严格的CI/CD.并且将我们的docs发布到github-page
+
+---
+
+我们需要进一步完善我们这里关于 ai 的偏好定义. 首先, 我们需要区分一些概念:
+
+1. 如果没有偏好配置, 那么我们仍然可以使用这些AI, 只不过使用的是“空配置”,
+   其实也就是用户的全局配置
+   - 注意,我看到很多地方你写`claude-sonnet-4-20250514`或者`codex-mini`,
+     不要这样写,
+     直接放空就好,因为模型是一直在更新的,这种写法会导致用户被误导、导致用户需要频繁更新
+   - claude-code官方的建议也就是三档:haiku、sonnet、opus
+     这样就行,不用那么精细的模型编号
+   - codex官方模型就一个档位,但是是配合五个model_reasoning_effort档位,这也是一种抽象的模式
+2. 默认的顺序是 claude, 然后是 codex
+3. 偏好配置不一定要用 claude-code/ codex 去命名,应该是自由的命名.
+   但是因为我们内置 claude-code-agent-sdk
+   和codex-agent-sdk,所以我们需要提供的写法应该是:
+   ```ts
+   p.ai((ai)=>ai
+     .profile("my-claude-opus", (p)=>p.useClaudeCodeAgentSdk({...}))
+     .profile("my-claude-sonnet", (p)=>p.useClaudeCodeAgentSdk({...}))
+     .profile("my-codex-xhight", (p)=>p.useCodexAgent({...,threadOptions:...}).retry({...}))
+     .profile("my-codex-medium", (p)=>p.useCodexAgent({...,threadOptions:...}).retry({...}))
+     .default("my-claude-opus", "my-claude-sonnet", "my-codex-xhight")
+     .retry(...)
+     .build() // 如果发现返回的是 `extends Builder`, 会自动调用 build. 这里我只是强调一种架构
+   )
+   .workflow("git-committer",w=>w.aiProfile("my-codex-medium"))
+   .mcp("git-committer",m=>m.aiProfile("my-codex-medium"))
+   ```
+
+---
+
+现在我们的perferences和我们的系统联动起来测试了吗?你有确定我们的配置能正确生效吗?
+因为其特殊性,我个人建议你使用`node:async_hooks`中的AsyncLocalStorage,把它封装成
+AsyncContext.
+
+这样能在整个系统中低入侵地将我们的偏好作用到整个系统中.而不用浪费参数传递

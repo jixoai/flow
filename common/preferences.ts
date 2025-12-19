@@ -14,54 +14,29 @@
 
 import { join } from "jsr:@std/path";
 import { USER_DIR } from "./paths.ts";
+import type {
+  AgentConfig,
+  AgentOptions,
+  AiPreferences,
+  McpConfig,
+  Preferences,
+  RetryConfig,
+  WorkflowConfig,
+} from "./preferences.schema.ts";
 
 // =============================================================================
-// Types
+// Types (re-export from schema)
 // =============================================================================
 
-export interface AgentConfig {
-  enabled?: boolean;
-  model?: string;
-  options?: {
-    maxTokens?: number;
-    temperature?: number;
-    permissionMode?: "default" | "acceptEdits" | "bypassPermissions";
-    maxTurns?: number;
-    [key: string]: unknown;
-  };
-}
-
-export interface RetryConfig {
-  maxAttempts?: number;
-  initialDelayMs?: number;
-  maxDelayMs?: number;
-  backoffMultiplier?: number;
-  retryOn?: Array<"timeout" | "rate_limit" | "server_error" | "network_error">;
-}
-
-export interface WorkflowConfig {
-  preferredAgent?: string;
-  disabled?: boolean;
-  options?: Record<string, unknown>;
-}
-
-export interface McpConfig {
-  disabled?: boolean;
-  options?: Record<string, unknown>;
-}
-
-export interface AiPreferences {
-  defaultAgent?: string;
-  agents?: Record<string, AgentConfig>;
-  fallbackChain?: string[];
-  retry?: RetryConfig;
-}
-
-export interface Preferences {
-  ai?: AiPreferences;
-  workflows?: Record<string, WorkflowConfig>;
-  mcps?: Record<string, McpConfig>;
-}
+export type {
+  AgentConfig,
+  AgentOptions,
+  AiPreferences,
+  McpConfig,
+  Preferences,
+  RetryConfig,
+  WorkflowConfig,
+};
 
 // =============================================================================
 // Constants
@@ -80,7 +55,7 @@ const RETRY_INTERVAL_MS = 3_000;
 // Default Configuration
 // =============================================================================
 
-export const DEFAULT_PREFERENCES: Required<Preferences> = {
+export const DEFAULT_PREFERENCES: Preferences = {
   ai: {
     defaultAgent: "claude-code",
     agents: {
@@ -394,15 +369,21 @@ export async function getFallbackChain(): Promise<string[]> {
 /**
  * Get retry config
  */
-export async function getRetryConfig(): Promise<Required<RetryConfig>> {
+export async function getRetryConfig(): Promise<{
+  maxAttempts: number;
+  initialDelayMs: number;
+  maxDelayMs: number;
+  backoffMultiplier: number;
+  retryOn: Array<"timeout" | "rate_limit" | "server_error" | "network_error">;
+}> {
   const prefs = await loadPreferences();
-  const userRetry = prefs.ai?.retry ?? {};
+  const userRetry = prefs.ai?.retry;
   return {
-    maxAttempts: userRetry.maxAttempts ?? 3,
-    initialDelayMs: userRetry.initialDelayMs ?? 1000,
-    maxDelayMs: userRetry.maxDelayMs ?? 30000,
-    backoffMultiplier: userRetry.backoffMultiplier ?? 2,
-    retryOn: userRetry.retryOn ??
+    maxAttempts: userRetry?.maxAttempts ?? 3,
+    initialDelayMs: userRetry?.initialDelayMs ?? 1000,
+    maxDelayMs: userRetry?.maxDelayMs ?? 30000,
+    backoffMultiplier: userRetry?.backoffMultiplier ?? 2,
+    retryOn: userRetry?.retryOn ??
       ["timeout", "rate_limit", "server_error", "network_error"],
   };
 }

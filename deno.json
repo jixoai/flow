@@ -6,7 +6,8 @@
     "zod": "npm:zod@^4.0",
     "@modelcontextprotocol/sdk": "npm:@modelcontextprotocol/sdk@1.25.1",
     "@anthropic-ai/claude-agent-sdk": "npm:@anthropic-ai/claude-agent-sdk",
-    "@openai/codex-sdk": "npm:@openai/codex-sdk"
+    "@openai/codex-sdk": "npm:@openai/codex-sdk",
+    "expect-type": "npm:expect-type@^1.1.0"
   },
   "nodeModulesDir": "auto",
   "publish": {
@@ -20,12 +21,18 @@
     "fmt": "deno fmt",
     "lint": "deno lint --fix && deno publish --dry-run --allow-dirty",
     "check": "deno check **/*.ts",
-    "pub": "deno run -A scripts/pub.ts"
+    "pub": "deno run -A scripts/pub.ts",
+    "gen:schema": "deno run -A common/preferences.schema.ts > user/preferences.schema.json"
   },
   "lint": {
     "exclude": ["docs/.vitepress/"],
     "rules": {
-      "exclude": ["no-import-prefix", "no-unversioned-import", "require-await"]
+      "exclude": [
+        "no-import-prefix",
+        "no-unversioned-import",
+        "require-await",
+        "ban-types"
+      ]
     }
   },
   "editor.codeActionsOnSave": ["source.organizeImports"]
