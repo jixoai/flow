@@ -217,4 +217,7 @@ JixoFlow 在加载 Workflow 和 MCP 时，会优先查找 `user/` 目录：
 ## 本章内容
 
 - [AI Agent 配置](./ai-agents) - 配置和管理 AI 后端
+- [Preferences API](./preferences-api) - 类型安全的配置 API
+- [提示词定制](./prompt-customization) - 模板化提示词系统
+- [Workflow 配置](./workflow-config) - Workflow 专属配置
 - [用户自定义](./user-customization) - 扩展和覆盖内置功能
