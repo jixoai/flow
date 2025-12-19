@@ -302,7 +302,7 @@ describe("Live Tests", {
   sanitizeOps: false,
   sanitizeResources: false,
 }, () => {
-  let testSessionId: string;
+  let _testSessionId: string;
 
   afterAll(async () => {
     // Clean up test sessions
