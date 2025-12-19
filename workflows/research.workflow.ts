@@ -11,18 +11,54 @@
  * 替代原 agents/runner.md
  */
 
-import { dirname, fromFileUrl, join } from "jsr:@std/path";
 import { defineWorkflow, type SubflowDef } from "./shared/base-workflow.ts";
 import { getMcpServerConfigs, getResearchDir } from "../common/paths.ts";
 import { aiResume, createAiQueryBuilder } from "../mcps/ai.mcp.ts";
 import { ensureReportDir, generateReportId } from "./research/helpers.ts";
+import {
+  getBuiltinVars,
+  readAndRenderPrompt,
+  readPrompt,
+} from "../common/prompt-loader.ts";
+import { mergeToolsConfig } from "../common/tools-merger.ts";
+import { getContextWorkflowConfig } from "../common/async-context.ts";
+import type { ResearchConfig } from "./shared/workflow-config.schema.ts";
 
-const __dirname = dirname(fromFileUrl(import.meta.url));
-const PROMPTS_DIR = join(__dirname, "research/prompts");
+// =============================================================================
+// Constants
+// =============================================================================
 
-// Load system prompt
+/** 默认允许的工具 */
+const DEFAULT_ALLOW_TOOLS = [
+  "Read",
+  "Write",
+  "Glob",
+  "Grep",
+  "Bash",
+  "mcp__search-duckduckgo__search_duckduckgo",
+  "mcp__html2md__html_to_markdown",
+];
+
+/** 默认禁用的工具 */
+const DEFAULT_DISALLOW_TOOLS = ["WebSearch", "WebFetch", "Task"];
+
+// =============================================================================
+// Prompt Loading
+// =============================================================================
+
+/**
+ * 加载 system prompt
+ *
+ * 优先级: user/prompts/research/ > workflows/research/prompts/
+ */
 async function loadSystemPrompt(): Promise<string> {
-  return await Deno.readTextFile(join(PROMPTS_DIR, "system.md"));
+  const vars = getBuiltinVars();
+  const rendered = await readAndRenderPrompt("research", vars);
+  if (rendered) return rendered;
+
+  // 回退
+  const base = await readPrompt("research");
+  return base ?? "";
 }
 
 // Lazy load subflows
@@ -62,8 +98,27 @@ export const workflow = defineWorkflow({
       console.error("[research] Starting...");
       console.error(`[research] Output: ${RESEARCH_BASE_DIR}`);
 
+      // 获取用户配置
+      const config = getContextWorkflowConfig<ResearchConfig>("research");
+
+      // 合并工具配置
+      const { allow, disallow } = mergeToolsConfig(
+        DEFAULT_ALLOW_TOOLS,
+        DEFAULT_DISALLOW_TOOLS,
+        config?.tools,
+      );
+
+      // 获取权限模式
+      const permissionMode = config?.permissionMode ?? "bypassPermissions";
+
       await Deno.mkdir(RESEARCH_BASE_DIR, { recursive: true });
       const systemPrompt = await loadSystemPrompt();
+
+      // 添加自定义指令
+      const finalPrompt = config?.prompts?.customInstructions
+        ? systemPrompt + "\n\n## Custom Instructions\n\n" +
+          config.prompts.customInstructions
+        : systemPrompt;
 
       if (args.resume) {
         const result = await aiResume({
@@ -88,19 +143,11 @@ export const workflow = defineWorkflow({
         .prompt(
           `${args.prompt}\n\nCONTEXT:\n- Report directory: ${reportDir}\n- Write final report to: ${reportDir}/MAIN.md`,
         )
-        .systemPrompt(systemPrompt)
+        .systemPrompt(finalPrompt)
         .mcpServers(mcpServers)
-        .allowTools([
-          "Read",
-          "Write",
-          "Glob",
-          "Grep",
-          "Bash",
-          "mcp__search-duckduckgo__search_duckduckgo",
-          "mcp__html2md__html_to_markdown",
-        ])
-        .disallowTools(["WebSearch", "WebFetch", "Task"])
-        .permissionMode("bypassPermissions")
+        .allowTools(allow)
+        .disallowTools(disallow)
+        .permissionMode(permissionMode)
         .cwd(RESEARCH_BASE_DIR)
         .executeWithSession();
 

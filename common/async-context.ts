@@ -230,3 +230,22 @@ export function getContextDefaultProfiles(): string[] {
   }
   return prefs?.ai?.fallbackChain ?? ["claude-code", "codex"];
 }
+
+// =============================================================================
+// Workflow Config Helpers
+// =============================================================================
+
+/**
+ * 获取当前上下文中指定 workflow 的配置
+ */
+export function getContextWorkflowConfig<T = Record<string, unknown>>(
+  workflowName: string,
+): T | undefined {
+  const prefs = PreferencesContext.tryGet();
+  const workflowConfig = prefs?.workflows?.[workflowName];
+  if (!workflowConfig) return undefined;
+
+  // 提取 config 字段（如果存在）
+  const config = (workflowConfig as Record<string, unknown>).config;
+  return (config ?? workflowConfig) as T;
+}

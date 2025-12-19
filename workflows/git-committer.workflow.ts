@@ -5,6 +5,19 @@
 
 import { defineWorkflow } from "./shared/base-workflow.ts";
 import { aiResume, createAiQueryBuilder } from "../mcps/ai.mcp.ts";
+import { mergeToolsConfig } from "../common/tools-merger.ts";
+import { getContextWorkflowConfig } from "../common/async-context.ts";
+import type { GitCommitterConfig } from "./shared/workflow-config.schema.ts";
+
+// =============================================================================
+// Constants
+// =============================================================================
+
+/** 默认允许的工具 */
+const DEFAULT_ALLOW_TOOLS = ["Bash", "Read"];
+
+/** 默认禁用的工具 */
+const DEFAULT_DISALLOW_TOOLS = ["WebSearch", "WebFetch", "Task", "Write"];
 
 // =============================================================================
 // System Prompt
@@ -75,6 +88,21 @@ export const workflow = defineWorkflow({
   handler: async (args) => {
     console.error("[git-committer] Analyzing changes...");
 
+    // 获取用户配置
+    const config = getContextWorkflowConfig<GitCommitterConfig>(
+      "git-committer",
+    );
+
+    // 合并工具配置
+    const { allow, disallow } = mergeToolsConfig(
+      DEFAULT_ALLOW_TOOLS,
+      DEFAULT_DISALLOW_TOOLS,
+      config?.tools,
+    );
+
+    // 获取权限模式
+    const permissionMode = config?.permissionMode ?? "acceptEdits";
+
     const [status, stagedDiff, unstagedDiff, history, branch] = await Promise
       .all([
         runGit(["status", "--porcelain"]),
@@ -131,6 +159,13 @@ ${
     }
 `;
 
+    // 添加自定义指令
+    let systemPrompt = GIT_COMMITTER_SYSTEM_PROMPT;
+    if (config?.prompts?.customInstructions) {
+      systemPrompt += "\n\n## Custom Instructions\n\n" +
+        config.prompts.customInstructions;
+    }
+
     const prompt = args.prompt ||
       "Analyze the changes and generate an appropriate commit message. Ask for confirmation before committing.";
 
@@ -146,10 +181,10 @@ ${
 
     const result = await createAiQueryBuilder()
       .prompt(prompt + "\n\n" + context)
-      .systemPrompt(GIT_COMMITTER_SYSTEM_PROMPT)
-      .allowTools(["Bash", "Read"])
-      .disallowTools(["WebSearch", "WebFetch", "Task", "Write"])
-      .permissionMode("acceptEdits")
+      .systemPrompt(systemPrompt)
+      .allowTools(allow)
+      .disallowTools(disallow)
+      .permissionMode(permissionMode)
       .cwd(Deno.cwd())
       .executeWithSession();
 
