@@ -23,6 +23,7 @@
     "pub": "deno run -A scripts/pub.ts"
   },
   "lint": {
+    "exclude": ["docs/.vitepress/"],
     "rules": {
       "exclude": ["no-import-prefix", "no-unversioned-import", "require-await"]
     }

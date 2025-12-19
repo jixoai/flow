@@ -1,6 +1,7 @@
 preferences.json
 node_modules/
-.vitepress/
+.vitepress/cache/
+.vitepress/dist/
 user/
 .source.json
 .zed/
